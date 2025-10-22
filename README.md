@@ -7,6 +7,10 @@ Run only the tests you need, not all the tests you have.
 [![PyPI version](https://badge.fury.io/py/pytest-depper.svg)](https://badge.fury.io/py/pytest-depper)
 [![Python Versions](https://img.shields.io/pypi/pyversions/pytest-depper.svg)](https://pypi.org/project/pytest-depper/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Downloads](https://static.pepy.tech/badge/pytest-depper)](https://pepy.tech/project/pytest-depper)
+[![Downloads/Month](https://static.pepy.tech/badge/pytest-depper/month)](https://pepy.tech/project/pytest-depper)
+[![Framework: pytest](https://img.shields.io/badge/framework-pytest-blue.svg)](https://pytest.org)
+[![GitHub Stars](https://img.shields.io/github/stars/ryx2/pytest-depper.svg)](https://github.com/ryx2/pytest-depper/stargazers)
 
 ## The Problem
 
