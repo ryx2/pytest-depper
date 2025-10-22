@@ -9,10 +9,10 @@ description = "Smart test selection based on AST-level code dependency analysis"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Raymond Xu", email = "raymond@example.com"}
 ]
 maintainers = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Raymond Xu", email = "raymond@example.com"}
 ]
 keywords = [
     "pytest",
@@ -54,11 +54,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/pytest-depper"
-Documentation = "https://github.com/yourusername/pytest-depper#readme"
-Repository = "https://github.com/yourusername/pytest-depper"
-Issues = "https://github.com/yourusername/pytest-depper/issues"
-Changelog = "https://github.com/yourusername/pytest-depper/releases"
+Homepage = "https://github.com/ryx2/pytest-depper"
+Documentation = "https://github.com/ryx2/pytest-depper#readme"
+Repository = "https://github.com/ryx2/pytest-depper"
+Issues = "https://github.com/ryx2/pytest-depper/issues"
+Changelog = "https://github.com/ryx2/pytest-depper/releases"
 
 [project.scripts]
 pytest-depper = "pytest_depper.cli:main"

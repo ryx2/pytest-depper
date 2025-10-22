@@ -260,7 +260,7 @@ pytest --depper -vv
 
 - Read the [full README](README.md) for detailed documentation
 - Check out [CONTRIBUTING.md](CONTRIBUTING.md) to contribute
-- Report issues at https://github.com/yourusername/pytest-depper/issues
+- Report issues at https://github.com/ryx2/pytest-depper/issues
 
 ---
 

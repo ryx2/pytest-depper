@@ -7,7 +7,7 @@ Thank you for your interest in contributing to pytest-depper! This document prov
 1. **Fork and clone the repository**
 
 ```bash
-git clone https://github.com/yourusername/pytest-depper.git
+git clone https://github.com/ryx2/pytest-depper.git
 cd pytest-depper
 ```
 
@@ -311,9 +311,9 @@ We welcome feature requests! Please:
 
 ## Questions?
 
-- Open a [GitHub Discussion](https://github.com/yourusername/pytest-depper/discussions)
+- Open a [GitHub Discussion](https://github.com/ryx2/pytest-depper/discussions)
 - Check the [README](README.md) for documentation
-- Look at existing [issues](https://github.com/yourusername/pytest-depper/issues)
+- Look at existing [issues](https://github.com/ryx2/pytest-depper/issues)
 
 ## License
 

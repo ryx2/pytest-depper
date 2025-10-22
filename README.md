@@ -422,7 +422,7 @@ Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guideli
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/pytest-depper.git
+git clone https://github.com/ryx2/pytest-depper.git
 cd pytest-depper
 
 # Install dependencies
@@ -452,4 +452,4 @@ Built with ❤️ for developers who value their time.
 
 **Star this repo** if pytest-depper saves you time!
 
-**Report issues** at https://github.com/yourusername/pytest-depper/issues
+**Report issues** at https://github.com/ryx2/pytest-depper/issues
