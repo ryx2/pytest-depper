@@ -1,8 +1,8 @@
-# pytest-depper
+# pytest-depper: Run only the tests you need, not all the tests you have
 
 **Smart test selection based on AST-level code dependency analysis.**
 
-Run only the tests you need, not all the tests you have.
+Diffs your current branch vs main, and then gets which tests hit those lines changed, and runs those. 
 
 [![PyPI version](https://badge.fury.io/py/pytest-depper.svg)](https://badge.fury.io/py/pytest-depper)
 [![Python Versions](https://img.shields.io/pypi/pyversions/pytest-depper.svg)](https://pypi.org/project/pytest-depper/)
@@ -14,7 +14,7 @@ Run only the tests you need, not all the tests you have.
 
 ## The Problem
 
-Imagine you have a 3,000-line Python file with 2,000 individual tests covering various parts of it. You make a small change—just 8 lines. Should you run all 2,000 tests? **No.**
+Imagine you have a 3,000-line Python file (you're a typical python dev) with 2,000 individual tests covering various parts of it. You make a small change—just 8 lines. Should you run all 2,000 tests? **No.**
 
 Most test selection tools either:
 - Run everything (slow)
