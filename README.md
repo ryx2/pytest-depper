@@ -104,61 +104,93 @@ pytest-depper --debug
 
 ## How It Works
 
-### Step 1: Find Changed Files
+pytest-depper uses **function-level change detection** with **static import analysis** to determine which tests need to run.
+
+### Step 1: Detect Changed Functions/Classes
 
 ```bash
-git diff --name-only origin/main...HEAD
+git diff -U0 origin/main...HEAD
 ```
 
-Output:
-```
-src/models/user.py
-src/utils/validators.py
+Output shows changed line numbers:
+```diff
++++ b/src/calculator.py
+@@ -5,3 +5,4 @@
+ def add(a, b):
++    # Added validation
+     return a + b
 ```
 
-### Step 2: Build Dependency Graph
+pytest-depper maps changed lines to function/class names using AST:
+```
+Line 6 changed → Part of function 'add'
+Changed symbols: {'add'}
+```
 
-pytest-depper parses all Python files in your project using AST analysis to understand imports:
+### Step 2: Build Symbol Import Map
+
+pytest-depper parses all Python files to track **which specific symbols** each test imports:
 
 ```python
-# src/models/user.py
-from .base import BaseModel  # → src/models/base.py
-from ..utils.validators import validate_email  # → src/utils/validators.py
+# test_math.py
+from calculator import add, subtract  # Imports: {'add', 'subtract'}
 
-# src/services/auth.py
-from ..models.user import User  # → src/models/user.py
+# test_multiply.py
+from calculator import multiply  # Imports: {'multiply'}
 
-# tests/test_auth.py
-from src.services.auth import AuthService  # → src/services/auth.py
+# test_integration.py
+import calculator  # Imports: {'*'} (entire module)
 ```
 
-This creates both forward and reverse dependency graphs:
-- **Forward:** What does each file import?
-- **Reverse:** What imports each file?
-
-### Step 3: Trace Affected Tests
-
-For each changed file, pytest-depper:
-1. Finds all files that import it (directly or transitively)
-2. Filters to only test files
-3. Returns the minimal set of tests that must run
-
-```
-user.py changed
-  ↓ imported by services/auth.py
-    ↓ imported by tests/test_auth.py
-      ✅ Run tests/test_auth.py
-
-validators.py changed
-  ↓ imported by models/user.py
-    ↓ imported by services/auth.py
-      ↓ imported by tests/test_auth.py
-        ✅ Run tests/test_auth.py
-  ↓ also imported by tests/test_validators.py
-    ✅ Run tests/test_validators.py
+This creates a precise map:
+```python
+{
+  'test_math.py': {'calculator.py': {'add', 'subtract'}},
+  'test_multiply.py': {'calculator.py': {'multiply'}},
+  'test_integration.py': {'calculator.py': {'*'}}
+}
 ```
 
-**Result:** Only 2 test files run instead of your entire suite.
+### Step 3: Match Changed Symbols to Test Imports
+
+For each changed symbol, pytest-depper finds tests that import it:
+
+```
+'add' function changed in calculator.py
+
+test_math.py imports 'add' → RUN ✅
+test_multiply.py imports 'multiply' → SKIP ❌
+test_integration.py imports '*' → RUN ✅ (imports entire module)
+```
+
+**Result:** Only tests that import the changed functions/classes will run.
+
+### Example: 3000-Line File Scenario
+
+```python
+# models.py (3000 lines, 50 functions)
+def validate_email(email): ...  # Changed (lines 145-150)
+def validate_phone(phone): ...
+def validate_address(addr): ...
+# ... 47 more functions
+
+# test_email.py
+from models import validate_email  # Imports: {'validate_email'}
+
+# test_phone.py
+from models import validate_phone  # Imports: {'validate_phone'}
+
+# test_integration.py
+from models import *  # Imports: {'*'}
+```
+
+When only `validate_email` changes:
+- ✅ `test_email.py` runs (imports the changed function)
+- ✅ `test_integration.py` runs (imports everything with `*`)
+- ❌ `test_phone.py` skipped (doesn't import the changed function)
+- ❌ 45+ other test files skipped
+
+**This is true function-level precision** - not just file-level dependency tracking.
 
 ## Configuration
 
@@ -352,27 +384,56 @@ Depper: Selected 4 test files
 
 ## Limitations
 
+pytest-depper uses **static import analysis**, not runtime coverage. This means it bases decisions on what tests import, not what they actually execute.
+
 ### What pytest-depper CAN'T detect:
 
-1. **Dynamic imports**
+1. **Imports that aren't used**
+   ```python
+   # test_multiply.py
+   from calculator import add, multiply  # Imports both
+
+   def test_multiply():
+       assert multiply(2, 3) == 6  # Only uses multiply
+   ```
+
+   If `add` changes, this test will run even though it doesn't use `add`. This is intentional conservatism - better to run too many tests than too few.
+
+2. **Dynamic imports**
    ```python
    module = __import__("my_module")  # Not detected
    importlib.import_module("my_module")  # Not detected
    ```
 
-2. **String-based references**
+3. **Module-level imports (`import module`)**
+   ```python
+   import calculator  # Imports: {'*'} - everything
+
+   def test_add():
+       calculator.add(2, 3)  # Uses only add
+   ```
+
+   When you do `import calculator`, pytest-depper treats it as importing **everything** from that module. Any change to the module will trigger this test.
+
+   **Recommendation:** Use `from module import specific_function` for better precision.
+
+4. **String-based references**
    ```python
    class_name = "UserModel"
    cls = globals()[class_name]  # Not detected
    ```
 
-3. **Data-driven changes**
+5. **Data-driven changes**
    - Changing a JSON config file won't trigger tests that read it
    - Modifying database migrations won't trigger related tests
    - Updating `.env` files won't trigger affected tests
 
-4. **Indirect behavioral dependencies**
-   - If you change a function's behavior but not its signature, tests that depend on that behavior will run only if they import the function
+6. **Changes outside functions/classes**
+   - Module-level constants
+   - Global variables
+   - Changes in blank lines or comments only
+
+   These won't be detected as "symbol changes" and will fall back to file-level matching.
 
 ### Recommended approach:
 

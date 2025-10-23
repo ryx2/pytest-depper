@@ -54,6 +54,11 @@ class DependencyAnalyzer:
         self.module_to_tests: dict[str, set[str]] = defaultdict(set)
         self._python_files: set[str] = set()
 
+        # New: Track which specific symbols are imported
+        # Maps: test_file -> source_file -> set of imported symbols
+        # Example: {'test_add.py': {'calculator.py': {'add', 'subtract'}}}
+        self.symbol_imports: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+
         # Configurable exclusion patterns
         self.exclusion_patterns = exclusion_patterns or [
             "venv",
@@ -102,8 +107,12 @@ class DependencyAnalyzer:
     def _build_dependency_graph(self) -> None:
         """Build complete forward and reverse dependency graphs."""
         for py_file in self._python_files:
-            dependencies = self._extract_dependencies(Path(py_file))
+            dependencies, symbols = self._extract_dependencies_and_symbols(Path(py_file))
             self.dependency_graph[py_file] = dependencies
+
+            # Store symbol imports
+            for source_file, imported_symbols in symbols.items():
+                self.symbol_imports[py_file][source_file] = imported_symbols
 
             # Build reverse graph (who depends on this file)
             for dep in dependencies:
@@ -118,7 +127,21 @@ class DependencyAnalyzer:
         Returns:
             Set of file paths that this file depends on
         """
+        dependencies, _ = self._extract_dependencies_and_symbols(file_path)
+        return dependencies
+
+    def _extract_dependencies_and_symbols(self, file_path: Path) -> tuple[set[str], dict[str, set[str]]]:
+        """Extract dependencies and imported symbols from a Python file.
+
+        Args:
+            file_path: Path to the Python file to analyze
+
+        Returns:
+            Tuple of (set of file dependencies, dict mapping source files to imported symbols)
+        """
         dependencies = set()
+        symbol_imports: dict[str, set[str]] = defaultdict(set)
+
         try:
             full_path = self.project_root / file_path
             with open(full_path, encoding="utf-8") as f:
@@ -129,25 +152,47 @@ class DependencyAnalyzer:
             # Extract imports
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
+                    # import module
                     for alias in node.names:
                         deps = self._resolve_import(alias.name, file_path)
                         dependencies.update(deps)
+                        # Track that we import the entire module (use '*' to indicate whole module)
+                        for dep in deps:
+                            symbol_imports[dep].add('*')
 
                 elif isinstance(node, ast.ImportFrom):
+                    # from module import symbol1, symbol2
                     if node.module:
                         if node.level > 0:  # Relative import
                             deps = self._resolve_relative_import(node.module, node.level, file_path)
                         else:  # Absolute import
                             deps = self._resolve_import(node.module, file_path)
                         dependencies.update(deps)
+
+                        # Track which specific symbols are imported
+                        for dep in deps:
+                            for alias in node.names:
+                                if alias.name == '*':
+                                    # from module import * - imports everything
+                                    symbol_imports[dep].add('*')
+                                else:
+                                    # from module import specific_function
+                                    symbol_imports[dep].add(alias.name)
+
                     elif node.level > 0:  # from . import something
                         deps = self._resolve_relative_import("", node.level, file_path)
                         dependencies.update(deps)
+                        for dep in deps:
+                            for alias in node.names:
+                                if alias.name == '*':
+                                    symbol_imports[dep].add('*')
+                                else:
+                                    symbol_imports[dep].add(alias.name)
 
         except Exception as e:
             print(f"Warning: Could not parse {file_path}: {e}")
 
-        return dependencies
+        return dependencies, symbol_imports
 
     def _resolve_import(self, module_name: str, from_file: Path) -> set[str]:
         """Resolve an absolute import to file paths.
@@ -376,6 +421,47 @@ class DependencyAnalyzer:
 
         return affected_tests
 
+    def get_affected_tests_by_symbols(self, changed_symbols: dict[str, set[str]]) -> set[str]:
+        """Get tests affected by specific symbol changes (function/class level).
+
+        This is more precise than file-level analysis. Only tests that import
+        the changed symbols will be selected.
+
+        Args:
+            changed_symbols: Dict mapping file paths to sets of changed symbol names
+
+        Returns:
+            Set of test file paths that import the changed symbols
+
+        Example:
+            >>> analyzer = DependencyAnalyzer()
+            >>> changed = {"calculator.py": {"add", "subtract"}}
+            >>> tests = analyzer.get_affected_tests_by_symbols(changed)
+            >>> print(tests)
+            {'test_math.py'}  # Only if test_math imports 'add' or 'subtract'
+        """
+        affected_tests = set()
+
+        for changed_file, changed_symbol_names in changed_symbols.items():
+            # Find all test files that import from this file
+            for test_file in self._python_files:
+                if not self._is_test_file(test_file):
+                    continue
+
+                # Check if this test imports from the changed file
+                if changed_file in self.symbol_imports[test_file]:
+                    imported_symbols = self.symbol_imports[test_file][changed_file]
+
+                    # Check if test imports any of the changed symbols
+                    if '*' in imported_symbols:
+                        # Test imports everything from this file
+                        affected_tests.add(test_file)
+                    elif imported_symbols & changed_symbol_names:
+                        # Test imports at least one changed symbol
+                        affected_tests.add(test_file)
+
+        return affected_tests
+
     def print_dependency_info(self, changed_files: list[str]) -> None:
         """Print detailed dependency information for debugging.
 
@@ -400,3 +486,33 @@ class DependencyAnalyzer:
             tests = self.module_to_tests.get(changed_file, set())
             if tests:
                 print(f"  Direct test coverage: {tests}")
+
+    def print_symbol_dependency_info(self, changed_symbols: dict[str, set[str]]) -> None:
+        """Print detailed symbol-level dependency information for debugging.
+
+        Args:
+            changed_symbols: Dict mapping files to changed symbol names
+        """
+        print("\n=== Symbol-Level Dependency Analysis ===")
+        for changed_file, symbols in changed_symbols.items():
+            print(f"\nChanged file: {changed_file}")
+            print(f"  Changed symbols: {symbols}")
+
+            # Find tests that import these symbols
+            affected_tests = []
+            for test_file in self._python_files:
+                if not self._is_test_file(test_file):
+                    continue
+
+                if changed_file in self.symbol_imports[test_file]:
+                    imported_symbols = self.symbol_imports[test_file][changed_file]
+                    if '*' in imported_symbols:
+                        affected_tests.append(f"{test_file} (imports all)")
+                    elif imported_symbols & symbols:
+                        matching = imported_symbols & symbols
+                        affected_tests.append(f"{test_file} (imports {matching})")
+
+            if affected_tests:
+                print(f"  Tests affected:")
+                for test in affected_tests:
+                    print(f"    ✓ {test}")

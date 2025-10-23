@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from .analyzer import DependencyAnalyzer
-from .git_utils import get_changed_files
+from .git_utils import get_changed_files, get_changed_files_and_symbols
 
 
 def pytest_addoption(parser):
@@ -63,8 +63,10 @@ def pytest_collection_modifyitems(config, items):
     # Get project root (where pytest is running from)
     project_root = Path(config.rootpath)
 
-    # Find changed files
-    changed_files = get_changed_files(base_branch=base_branch, project_root=project_root)
+    # Find changed files and their changed symbols
+    changed_files, changed_symbols = get_changed_files_and_symbols(
+        base_branch=base_branch, project_root=project_root
+    )
 
     if not changed_files:
         if run_all_on_error:
@@ -98,10 +100,18 @@ def pytest_collection_modifyitems(config, items):
 
     # Print debug info if requested
     if debug:
-        analyzer.print_dependency_info(changed_files)
+        if changed_symbols:
+            analyzer.print_symbol_dependency_info(changed_symbols)
+        else:
+            analyzer.print_dependency_info(changed_files)
 
-    # Get affected tests
-    affected_tests = analyzer.get_affected_tests(changed_files)
+    # Get affected tests using symbol-level analysis if available
+    if changed_symbols:
+        # Use precise symbol-level matching
+        affected_tests = analyzer.get_affected_tests_by_symbols(changed_symbols)
+    else:
+        # Fallback to file-level matching (e.g., for new files or non-Python changes)
+        affected_tests = analyzer.get_affected_tests(changed_files)
 
     if not affected_tests:
         print("\nDepper: No tests affected by these changes")
